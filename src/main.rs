@@ -3,16 +3,24 @@ use std::io::{self, Write};
 
 use std::env;
 use std::fs;
+use std::process::Command;
 use std::process::ExitCode;
 
-// Check  if a command exists in the PATH environment variable
+// Return absolute path of the command if found in the PATH environment variable
 fn get_path(command_name: &str) -> Option<String> {
     let path_directories = env::var("PATH").unwrap();
     for directory in path_directories.split(":") {
         for file in fs::read_dir(directory).unwrap() {
             let file_name = file.as_ref().unwrap().file_name().into_string().unwrap();
             if file_name == command_name {
-                return Some(file.as_ref().unwrap().path().into_os_string().into_string().unwrap());
+                return Some(
+                    file.as_ref()
+                        .unwrap()
+                        .path()
+                        .into_os_string()
+                        .into_string()
+                        .unwrap(),
+                );
             }
         }
     }
@@ -41,16 +49,30 @@ fn main() -> ExitCode {
                 "type" => {
                     if builtin_commands.contains(&x.1) {
                         println!("{} is a shell builtin", x.1);
-                    } else if let Some(path) = get_path(x.1) {
-                        println!("{} is {}", x.1, path)
+                    } else if let Some(command_path) = get_path(x.1) {
+                        println!("{} is {}", x.1, command_path)
                     } else {
                         println!("{}: not found", x.1);
                     }
                 }
-                _ => println!("{} {}: command not found", x.0, x.1),
+                _ => {
+                    // if let Some(command_path) = get_path(x.0) {
+                    // let _ = Command::new(command_path)
+                    // Run arbitrary command if found in PATH
+                    if get_path(x.0).is_some() {
+                        let _ = Command::new(x.0)
+                            .args(x.1.split(" "))
+                            .spawn()
+                            .expect("Command failed to run")
+                            .wait();
+                    } else {
+                        println!("{} {}: command not found", x.0, x.1)
+                    }
+                }
             },
             None => println!("{}: command not found", trimmed_input),
         }
+
         input.clear(); // Clear the input string so that it can be used again without re-declaring the variable
     }
 }
