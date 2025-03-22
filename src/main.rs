@@ -14,23 +14,27 @@ fn get_path(command_name: &str) -> Option<String> {
         for file in fs::read_dir(directory).unwrap() {
             let file_name = file.as_ref().unwrap().file_name().into_string().unwrap();
             if file_name == command_name {
-                return Some(
-                    file.as_ref()
-                        .unwrap()
-                        .path()
-                        .into_os_string()
-                        .into_string()
-                        .unwrap(),
-                );
+                return Some(file.as_ref().unwrap().path().to_str().unwrap().to_owned());
             }
         }
     }
     None
 }
 
+fn echo(args: &str) {
+    let parsed_string: String = if args.starts_with('\'') && args.ends_with('\'') {
+        args.split('\'').filter(|&x| !x.is_empty()).collect()
+    } else {
+        args.split_ascii_whitespace()
+            .map(|x| String::from(x) + " ")
+            .collect()
+    };
+    println!("{}", parsed_string);
+}
+
 // Function to change the directory (implemention of cd)
 fn change_directory(path: &str) {
-    // Try `Cow` to avoid using String
+    // TODO: Maybe try `Cow` to avoid using String
     let cleaned_path = if path == "~" {
         env::var("HOME").unwrap()
     } else {
@@ -59,20 +63,33 @@ fn main() -> ExitCode {
 
         // Sanitize the input
         let trimmed_input = input.trim(); // Trim also removes the \n when pressing enter to run the command
-        let mut trimmed_input_it = trimmed_input.split_ascii_whitespace();
-        let command = trimmed_input_it.next().unwrap();
-        let mut args: String = trimmed_input_it.map(|x| String::from(x) + " ").collect();
-        args.pop(); // Remove the extra space at the end
+                                          // let mut trimmed_input_it = trimmed_input.split_ascii_whitespace();
+                                          // let command = trimmed_input_it.next().unwrap();
+                                          // let mut args: String = trimmed_input_it.map(|x| String::from(x) + " ").collect();
+                                          // args.pop(); // Remove the extra space at the end
+
+        let command_args = trimmed_input.split_once(" ");
+
+        if command_args.is_none() && trimmed_input.is_empty() {
+            continue;
+        }
+
+        // Handle the case of only the command supplied
+        let (command, args) = if command_args.is_none() && !trimmed_input.is_empty() {
+            (trimmed_input, "")
+        } else {
+            command_args.unwrap()
+        };
 
         match command {
-            "exit" => return ExitCode::from(args.as_bytes()[0] - 48), // Return exit code from the program and exit it
-            "echo" => println!("{}", args),
+            "exit" => return ExitCode::from(args.as_bytes()[0] - 48), // Return exit code from the program and exit it TODO: use parse
+            "echo" => echo(args),
             "pwd" => println!("{}", env::current_dir().unwrap().display()),
-            "cd" => change_directory(args.as_str()),
+            "cd" => change_directory(args),
             "type" => {
-                if builtin_commands.contains(&args.as_str()) {
+                if builtin_commands.contains(&args) {
                     println!("{} is a shell builtin", args);
-                } else if let Some(command_path) = get_path(args.as_str()) {
+                } else if let Some(command_path) = get_path(args) {
                     println!("{} is {}", args, command_path)
                 } else {
                     println!("{}: not found", args);
@@ -84,6 +101,7 @@ fn main() -> ExitCode {
                 // let _ = Command::new(command_path)
                 // Run arbitrary command if found in PATH
                 if get_path(command).is_some() {
+                    // TODO: refactor this and add without args option
                     let _ = Command::new(command)
                         .args(args.split(" "))
                         .spawn()
