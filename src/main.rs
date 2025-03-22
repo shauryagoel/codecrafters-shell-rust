@@ -7,6 +7,8 @@ fn main() -> ExitCode {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
+    let known_commands = ["exit", "echo", "type"];
+
     let mut input = String::new();
     loop {
         print!("$ ");
@@ -18,6 +20,13 @@ fn main() -> ExitCode {
             Some(x) => match x.0 {
                 "exit" => return ExitCode::from(x.1.as_bytes()[0] - 48), // Return exit code from the program and exit it
                 "echo" => println!("{}", x.1),
+                "type" => {
+                    if known_commands.contains(&x.1) {
+                        println!("{} is a shell builtin", x.1);
+                    } else {
+                        println!("{}: not found", x.1);
+                    }
+                }
                 _ => println!("{} {}: command not found", x.0, x.1),
             },
             None => println!("{}: command not found", trimmed_input),
