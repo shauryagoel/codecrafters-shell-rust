@@ -30,7 +30,14 @@ fn get_path(command_name: &str) -> Option<String> {
 
 // Function to change the directory (implemention of cd)
 fn change_directory(path: &str) {
-    let path_obj = Path::new(path);
+    // Try `Cow` to avoid using String
+    let cleaned_path = if path == "~" {
+        env::var("HOME").unwrap()
+    } else {
+        String::from(path)
+    };
+
+    let path_obj = Path::new(cleaned_path.as_str());
 
     // Changes the current directory, if error occurs like no directory exists, then, print an error
     if env::set_current_dir(path_obj).is_err() {
