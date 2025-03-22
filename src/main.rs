@@ -3,6 +3,7 @@ use std::io::{self, Write};
 
 use std::env;
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 use std::process::ExitCode;
 
@@ -27,11 +28,21 @@ fn get_path(command_name: &str) -> Option<String> {
     None
 }
 
+// Function to change the directory (implemention of cd)
+fn change_directory(path: &str) {
+    let path_obj = Path::new(path);
+
+    // Changes the current directory, if error occurs like no directory exists, then, print an error
+    if env::set_current_dir(path_obj).is_err() {
+        println!("cd: {}: No such file or directory", path);
+    }
+}
+
 fn main() -> ExitCode {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
-    let builtin_commands = ["exit", "echo", "type", "pwd"];
+    let builtin_commands = ["exit", "echo", "type", "pwd", "cd"];
 
     let mut input = String::new();
     loop {
@@ -50,6 +61,7 @@ fn main() -> ExitCode {
             "exit" => return ExitCode::from(args.as_bytes()[0] - 48), // Return exit code from the program and exit it
             "echo" => println!("{}", args),
             "pwd" => println!("{}", env::current_dir().unwrap().display()),
+            "cd" => change_directory(args.as_str()),
             "type" => {
                 if builtin_commands.contains(&args.as_str()) {
                     println!("{} is a shell builtin", args);
