@@ -31,46 +31,54 @@ fn main() -> ExitCode {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
-    let builtin_commands = ["exit", "echo", "type"];
+    let builtin_commands = ["exit", "echo", "type", "pwd"];
 
     let mut input = String::new();
     loop {
         print!("$ ");
         stdout.flush().unwrap();
         stdin.read_line(&mut input).unwrap(); // Wait for user input
-        let trimmed_input = input.trim(); // Trim also removes the \n when pressing enter to run the command
 
-        // Split at the first space character
-        // to form the format of- `command arg1 arg2 ...`
-        match trimmed_input.split_once(" ") {
-            Some(x) => match x.0 {
-                "exit" => return ExitCode::from(x.1.as_bytes()[0] - 48), // Return exit code from the program and exit it
-                "echo" => println!("{}", x.1),
-                "type" => {
-                    if builtin_commands.contains(&x.1) {
-                        println!("{} is a shell builtin", x.1);
-                    } else if let Some(command_path) = get_path(x.1) {
-                        println!("{} is {}", x.1, command_path)
-                    } else {
-                        println!("{}: not found", x.1);
-                    }
+        // Sanitize the input
+        let trimmed_input = input.trim(); // Trim also removes the \n when pressing enter to run the command
+        let mut trimmed_input_it = trimmed_input.split_ascii_whitespace();
+        let command = trimmed_input_it.next().unwrap();
+        let mut args: String = trimmed_input_it.map(|x| String::from(x) + " ").collect();
+        args.pop(); // Remove the extra space at the end
+
+        match command {
+            "exit" => return ExitCode::from(args.as_bytes()[0] - 48), // Return exit code from the program and exit it
+            "echo" => println!("{}", args),
+            "pwd" => println!("{}", env::current_dir().unwrap().display()),
+            "type" => {
+                if builtin_commands.contains(&args.as_str()) {
+                    println!("{} is a shell builtin", args);
+                } else if let Some(command_path) = get_path(args.as_str()) {
+                    println!("{} is {}", args, command_path)
+                } else {
+                    println!("{}: not found", args);
                 }
-                _ => {
-                    // if let Some(command_path) = get_path(x.0) {
-                    // let _ = Command::new(command_path)
-                    // Run arbitrary command if found in PATH
-                    if get_path(x.0).is_some() {
-                        let _ = Command::new(x.0)
-                            .args(x.1.split(" "))
-                            .spawn()
-                            .expect("Command failed to run")
-                            .wait();
-                    } else {
-                        println!("{} {}: command not found", x.0, x.1)
+            }
+            _ => {
+                // Uncomment below 2 lines for using absolute path of the command
+                // if let Some(command_path) = get_path(x.0) {
+                // let _ = Command::new(command_path)
+                // Run arbitrary command if found in PATH
+                if get_path(command).is_some() {
+                    let _ = Command::new(command)
+                        .args(args.split(" "))
+                        .spawn()
+                        .expect("Command failed to run")
+                        .wait();
+                } else {
+                    // This is done instead of using trimmed_input is because it may not be sanitized
+                    let mut message = String::from(command);
+                    if !args.is_empty() {
+                        message += " {}";
                     }
+                    println!("{}: command not found", message)
                 }
-            },
-            None => println!("{}: command not found", trimmed_input),
+            }
         }
 
         input.clear(); // Clear the input string so that it can be used again without re-declaring the variable
