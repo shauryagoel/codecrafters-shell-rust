@@ -81,6 +81,9 @@ fn main() -> ExitCode {
             command_args.unwrap()
         };
 
+        // Handle double single quotes in args
+        let parsed_args: Vec<_> = args.split('\'').filter(|&x| !x.is_empty()).collect();
+
         match command {
             "exit" => return ExitCode::from(args.as_bytes()[0] - 48), // Return exit code from the program and exit it TODO: use parse
             "echo" => echo(args),
@@ -96,19 +99,15 @@ fn main() -> ExitCode {
                 }
             }
             _ => {
-                // Uncomment below 2 lines for using absolute path of the command
-                // if let Some(command_path) = get_path(x.0) {
-                // let _ = Command::new(command_path)
                 // Run arbitrary command if found in PATH
                 if get_path(command).is_some() {
-                    // TODO: refactor this and add without args option
                     let _ = Command::new(command)
-                        .args(args.split(" "))
+                        .args(parsed_args.iter().filter(|&&x| !x.trim().is_empty()))
                         .spawn()
                         .expect("Command failed to run")
                         .wait();
                 } else {
-                    // This is done instead of using trimmed_input is because it may not be sanitized
+                    // This is done instead of using trimmed_input because it may not be sanitized
                     let mut message = String::from(command);
                     if !args.is_empty() {
                         message += " {}";
