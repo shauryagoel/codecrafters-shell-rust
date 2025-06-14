@@ -26,16 +26,14 @@ fn get_path(command_name: &str) -> Option<String> {
     None
 }
 
-fn builtin_echo(args: &str) {
-    // Handle case of args which contains double single quotes and also no quotes
-    let parsed_string: String = if args.starts_with('\'') && args.ends_with('\'') {
-        args.split('\'').filter(|&x| !x.is_empty()).collect()
-    } else {
-        args.split_ascii_whitespace()
-            .map(|x| String::from(x) + " ")
-            .collect()
-    };
-    println!("{}", parsed_string);
+// Print the vector of strings to stdout
+// This function assumes that the `parsed_args` is already in a clean state
+// like removing duplicate spaces, handling quotes, etc.
+fn builtin_echo(parsed_args: Vec<&str>) {
+    for arg in parsed_args {
+        print!("{arg}")
+    }
+    println!();
 }
 
 fn builtin_cd(path: Option<&&str>) {
@@ -59,6 +57,7 @@ fn builtin_cd(path: Option<&&str>) {
 fn builtin_type(command: &str) {
     // Command implemented in the current program are called builtin commands
     // NOTE: If adding new builtin command, make sure to add it below
+    // TODO: use enums for this to reduce human errors
     let builtin_commands = ["exit", "echo", "type", "pwd", "cd"];
 
     if builtin_commands.contains(&command) {
@@ -68,6 +67,43 @@ fn builtin_type(command: &str) {
     } else {
         println!("{}: not found", command);
     }
+}
+
+// Parse the args string, removing unnecessary spaces, quotes, etc.
+// Handles repeated spaces, single quotes inside double quotes, and many such cases.
+fn parse_args(args: &str) -> Vec<&str> {
+    let mut output: Vec<&str> = Vec::new();
+
+    let mut it = args.chars().enumerate();
+    while let Some((ind1, c1)) = it.next() {
+        if c1 == '\'' || c1 == '\"' {
+            let (ind2, _) = it.find(|(_, x)| x == &c1).unwrap();
+
+            // Only push non-empty strings
+            if ind2 - ind1 > 1 {
+                output.push(&args[(ind1 + 1)..ind2]);
+            }
+        } else if c1.is_ascii_alphabetic() || c1.is_ascii_digit() || c1.is_ascii_punctuation() {
+            // We need to clone as we can't iterate one step back.
+            // Hence, create a second iterator and move it as desired,
+            // then, move the original iterator one less times than the second iterator
+            let (ind2, _) = it
+                .clone() // Cheap to clone
+                .find(|(_, x)| x == &'\'' || x == &'\"' || x == &' ')
+                .unwrap_or((args.len(), ' '));
+
+            output.push(&args[ind1..ind2]);
+
+            // As we can't iterate one step back,
+            // we move the original iterator n -1 times
+            for _ in 0..(ind2 - ind1 - 1) {
+                it.next();
+            }
+        } else if c1 == ' ' && !output.is_empty() && output.last().unwrap() != &" " {
+            output.push(" ");
+        }
+    }
+    output
 }
 
 fn main() -> ExitCode {
@@ -96,12 +132,12 @@ fn main() -> ExitCode {
         };
 
         // Handle double single quotes in args
-        let parsed_args: Vec<&str> = args.split('\'').filter(|&x| !x.is_empty()).collect();
-        // println!("{:?}", parsed_args);
+        let parsed_args = parse_args(args);
+        // println!("{:?} {}", parsed_args, parsed_args.len());
 
         match command {
             "exit" => return ExitCode::from(get_exit_code(parsed_args.first())),
-            "echo" => builtin_echo(args),
+            "echo" => builtin_echo(parsed_args),
             "pwd" => println!("{}", env::current_dir().unwrap().display()),
             "cd" => builtin_cd(parsed_args.first()),
             "type" => builtin_type(args),
