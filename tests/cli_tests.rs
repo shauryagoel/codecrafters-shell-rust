@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 fn test_echo() {
     // Table drive test
     let table_test_inputs: Vec<(&str, &str)> = vec![
+        // Single and double quotes
         ("echo 2", "2"),
         ("echo a", "a"),
         ("echo banana orange", "banana orange"),
@@ -21,6 +22,9 @@ fn test_echo() {
             "echo \"test\"  \"hello's\"  world\"\"script",
             "test hello's worldscript",
         ),
+        // Backlash outside quotes
+        (r#"echo "before\   after""#, r"before\   after"),
+        (r"echo world\ \ \ \ \ \ script", "world      script"),
     ];
 
     let binary_path = env::var("CARGO_MANIFEST_DIR").unwrap()

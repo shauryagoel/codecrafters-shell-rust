@@ -89,7 +89,7 @@ fn parse_args(args: &str) -> Vec<&str> {
             // then, move the original iterator one less times than the second iterator
             let (ind2, _) = it
                 .clone() // Cheap to clone
-                .find(|(_, x)| x == &'\'' || x == &'\"' || x == &' ')
+                .find(|(_, x)| x == &'\'' || x == &'\"' || x == &' ' || x == &'\\')
                 .unwrap_or((args.len(), ' '));
 
             output.push(&args[ind1..ind2]);
@@ -101,6 +101,9 @@ fn parse_args(args: &str) -> Vec<&str> {
             }
         } else if c == ' ' && !output.is_empty() && output.last().unwrap() != &" " {
             output.push(" ");
+        } else if c == '\\' {
+            let _ind = it.next().unwrap().0;
+            output.push(&args[_ind..(_ind + 1)]); // Push the &str at _ind
         }
     }
     output
