@@ -76,12 +76,26 @@ fn parse_args(args: &str) -> Vec<&str> {
 
     let mut it = args.chars().enumerate();
     while let Some((ind1, c)) = it.next() {
-        if c == '\'' || c == '\"' {
-            let (ind2, _) = it.find(|(_, x)| x == &c).unwrap();
+        if c == '\'' {
+            let (ind2, _) = it.find(|(_, x)| x == &'\'').unwrap();
+            output.push(&args[(ind1 + 1)..ind2]);
+        } else if c == '"' {
+            let mut prev_ind1 = ind1 + 1; // After the quote
+            let it2 = it.by_ref();
 
-            // Only push non-empty strings
-            if ind2 - ind1 > 1 {
-                output.push(&args[(ind1 + 1)..ind2]);
+            while let Some((_ind2, _c2)) = it2.next() {
+                if _c2 == '"' {
+                    output.push(&args[prev_ind1.._ind2]);
+                    break;
+                } else if _c2 == '\\' {
+                    let (_ind3, _c3) = it2.next().unwrap();
+                    // Backslash before the following 4 characters preserves the special meaning of these
+                    if _c3 == '\n' || _c3 == '$' || _c3 == '"' || _c3 == '\\' {
+                        output.push(&args[prev_ind1.._ind2]);
+                        output.push(&args[_ind3..(_ind3 + 1)]);
+                        prev_ind1 = _ind3 + 1;
+                    }
+                }
             }
         } else if c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '/' || c == '.' {
             // We need to clone as we can't iterate one step back.

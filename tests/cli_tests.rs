@@ -25,6 +25,12 @@ fn test_echo() {
         // Backlash outside quotes
         (r#"echo "before\   after""#, r"before\   after"),
         (r"echo world\ \ \ \ \ \ script", "world      script"),
+        // Backslash within double quotes
+        (r#"echo "hello'script'\\n'world""#, r"hello'script'\n'world"),
+        (
+            r#"echo "hello\"insidequotes"script\""#,
+            r#"hello"insidequotesscript""#,
+        ),
     ];
 
     let binary_path = env::var("CARGO_MANIFEST_DIR").unwrap()
