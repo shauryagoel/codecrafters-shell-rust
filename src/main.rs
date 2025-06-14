@@ -13,13 +13,13 @@ fn get_exit_code(str_code: Option<&&str>) -> u8 {
 }
 
 // Return absolute path of the command if found in the PATH environment variable
-fn get_path(command_name: &str) -> Option<String> {
+fn get_absolute_command_path(command_name: &str) -> Option<String> {
     let path_directories = env::var("PATH").unwrap();
     for directory in path_directories.split(":") {
         for file in fs::read_dir(directory).unwrap() {
             let file_name = file.as_ref().unwrap().file_name().into_string().unwrap();
             if file_name == command_name {
-                return Some(file.as_ref().unwrap().path().to_str().unwrap().to_owned());
+                return Some(file.unwrap().path().to_str().unwrap().to_owned());
             }
         }
     }
@@ -41,7 +41,7 @@ fn builtin_cd(path: Option<&&str>) {
     let corrected_path = if path.unwrap_or(&"~") == &"~" {
         env::var("HOME").unwrap()
     } else {
-        path.unwrap().to_owned().to_owned()
+        (*path.unwrap()).to_owned()
     };
 
     let path_obj = Path::new(corrected_path.as_str());
@@ -62,7 +62,7 @@ fn builtin_type(command: &str) {
 
     if builtin_commands.contains(&command) {
         println!("{} is a shell builtin", command);
-    } else if let Some(command_path) = get_path(command) {
+    } else if let Some(command_path) = get_absolute_command_path(command) {
         println!("{} is {}", command, command_path)
     } else {
         println!("{}: not found", command);
@@ -75,15 +75,15 @@ fn parse_args(args: &str) -> Vec<&str> {
     let mut output: Vec<&str> = Vec::new();
 
     let mut it = args.chars().enumerate();
-    while let Some((ind1, c1)) = it.next() {
-        if c1 == '\'' || c1 == '\"' {
-            let (ind2, _) = it.find(|(_, x)| x == &c1).unwrap();
+    while let Some((ind1, c)) = it.next() {
+        if c == '\'' || c == '\"' {
+            let (ind2, _) = it.find(|(_, x)| x == &c).unwrap();
 
             // Only push non-empty strings
             if ind2 - ind1 > 1 {
                 output.push(&args[(ind1 + 1)..ind2]);
             }
-        } else if c1.is_ascii_alphabetic() || c1.is_ascii_digit() || c1.is_ascii_punctuation() {
+        } else if c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '/' || c == '.' {
             // We need to clone as we can't iterate one step back.
             // Hence, create a second iterator and move it as desired,
             // then, move the original iterator one less times than the second iterator
@@ -99,7 +99,7 @@ fn parse_args(args: &str) -> Vec<&str> {
             for _ in 0..(ind2 - ind1 - 1) {
                 it.next();
             }
-        } else if c1 == ' ' && !output.is_empty() && output.last().unwrap() != &" " {
+        } else if c == ' ' && !output.is_empty() && output.last().unwrap() != &" " {
             output.push(" ");
         }
     }
@@ -118,20 +118,13 @@ fn main() -> ExitCode {
 
         // Sanitize the input
         let trimmed_input = input.trim(); // Trim also removes the \n when pressing enter to run the command
-        let command_args = trimmed_input.split_once(" ");
-
-        if command_args.is_none() && trimmed_input.is_empty() {
+        if trimmed_input.is_empty() {
             continue;
         }
-
         // Handle the case of only the command supplied
-        let (command, args) = if command_args.is_none() && !trimmed_input.is_empty() {
-            (trimmed_input, "")
-        } else {
-            command_args.unwrap()
-        };
+        let (command, args) = trimmed_input.split_once(" ").unwrap_or((trimmed_input, ""));
 
-        // Handle double single quotes in args
+        // Clean the args
         let parsed_args = parse_args(args);
         // println!("{:?} {}", parsed_args, parsed_args.len());
 
@@ -143,9 +136,9 @@ fn main() -> ExitCode {
             "type" => builtin_type(args),
             _ => {
                 // Run the command in a subshell if found in PATH
-                if get_path(command).is_some() {
+                if get_absolute_command_path(command).is_some() {
                     let _ = Command::new(command)
-                        .args(parsed_args.iter().filter(|&&x| !x.trim().is_empty()))
+                        .args(parsed_args.into_iter().filter(|&x| !x.trim().is_empty()))
                         .spawn()
                         .expect("Command failed to run")
                         .wait();
