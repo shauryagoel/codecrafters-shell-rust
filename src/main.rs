@@ -69,9 +69,9 @@ fn builtin_type(command: &str) {
     }
 }
 
-// Parse the args string, removing unnecessary spaces, quotes, etc.
+// Parse the input string, removing unnecessary spaces, quotes, etc.
 // Handles repeated spaces, single quotes inside double quotes, and many such cases.
-fn parse_args(args: &str) -> Vec<&str> {
+fn parse_input(args: &str) -> Vec<&str> {
     let mut output: Vec<&str> = Vec::new();
 
     let mut it = args.chars().enumerate();
@@ -138,23 +138,27 @@ fn main() -> ExitCode {
         if trimmed_input.is_empty() {
             continue;
         }
-        // Handle the case of only the command supplied
-        let (command, args) = trimmed_input.split_once(" ").unwrap_or((trimmed_input, ""));
 
-        // Clean the args
-        let parsed_args = parse_args(args);
+        // Clean the input
+        let parsed_input = parse_input(trimmed_input);
+        let parsed_command = parsed_input[0];
+        let parsed_args: Vec<&str> = if parsed_input.len() > 2 {
+            parsed_input[2..].into() // The second element in the parsed_input is " ", hence skip it
+        } else {
+            Vec::new()
+        };
         // println!("{:?} {}", parsed_args, parsed_args.len());
 
-        match command {
+        match parsed_command {
             "exit" => return ExitCode::from(get_exit_code(parsed_args.first())),
             "echo" => builtin_echo(parsed_args),
             "pwd" => println!("{}", env::current_dir().unwrap().display()),
             "cd" => builtin_cd(parsed_args.first()),
-            "type" => builtin_type(args),
+            "type" => builtin_type(parsed_args.first().unwrap()),
             _ => {
                 // Run the command in a subshell if found in PATH
-                if get_absolute_command_path(command).is_some() {
-                    let _ = Command::new(command)
+                if get_absolute_command_path(parsed_command).is_some() {
+                    let _ = Command::new(parsed_command)
                         .args(parsed_args.into_iter().filter(|&x| !x.trim().is_empty()))
                         .spawn()
                         .expect("Command failed to run")
