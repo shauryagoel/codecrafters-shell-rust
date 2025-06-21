@@ -22,7 +22,7 @@ fn test_echo() {
             "echo \"test\"  \"hello's\"  world\"\"script",
             "test hello's worldscript",
         ),
-        // Backlash outside quotes
+        // Backlash outide quotes
         (r#"echo "before\   after""#, r"before\   after"),
         (r"echo world\ \ \ \ \ \ script", "world      script"),
         // Backslash within double quotes
