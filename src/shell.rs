@@ -1,9 +1,10 @@
 use std::{
     io::{BufRead, Write},
+    os::unix::fs::PermissionsExt,
+    path::Path,
     process::{Command, ExitCode, Stdio},
 };
 
-use std::path::Path;
 pub struct Shell<'a> {
     pub command: &'a str,
     args: &'a Vec<&'a str>,
@@ -41,9 +42,24 @@ impl<'a> Shell<'a> {
     fn get_absolute_command_path(command_name: &str) -> Option<String> {
         let path_directories = std::env::var("PATH").unwrap();
         for directory in path_directories.split(":") {
-            for file in std::fs::read_dir(directory).unwrap() {
+            // Check if directory actually exists in the filesystem
+            let directory_entries = match std::fs::read_dir(directory) {
+                Ok(x) => x,
+                Err(_) => continue,
+            };
+            for file in directory_entries {
+                // Check permission bits to find executables
+                let is_executable = file
+                    .as_ref()
+                    .unwrap()
+                    .metadata()
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o111
+                    != 0;
                 let file_name = file.as_ref().unwrap().file_name().into_string().unwrap();
-                if file_name == command_name {
+                if is_executable && file_name == command_name {
                     return Some(file.unwrap().path().to_str().unwrap().to_owned());
                 }
             }
