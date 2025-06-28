@@ -66,22 +66,23 @@ fn get_stderr_stream_path(parsed_args: &mut Vec<&str>) -> Box<dyn Write> {
 fn parse_input(args: &str) -> Vec<&str> {
     let mut output: Vec<&str> = Vec::new();
 
-    let mut it = args.chars().enumerate();
+    // Make this peekable to allow peeking the values
+    // in the case where the current character is part of a word
+    let mut it = args.chars().enumerate().peekable();
     while let Some((ind1, c)) = it.next() {
         if c == '\'' {
             let (ind2, _) = it.find(|(_, x)| x == &'\'').unwrap();
             output.push(&args[(ind1 + 1)..ind2]);
         } else if c == '"' {
-            let mut prev_ind1 = ind1 + 1; // After the quote
-            let it2 = it.by_ref();
+            let mut prev_ind1 = ind1 + 1; // After the `"`
 
-            while let Some((_ind2, _c2)) = it2.next() {
+            while let Some((_ind2, _c2)) = it.next() {
                 if _c2 == '"' {
                     output.push(&args[prev_ind1.._ind2]);
                     break;
                 } else if _c2 == '\\' {
-                    let (_ind3, _c3) = it2.next().unwrap();
-                    // Backslash before the following 4 characters preserves the special meaning of these
+                    // Backslash before the below 4 characters preserves the special meaning of these
+                    let (_ind3, _c3) = it.next().unwrap();
                     if _c3 == '\n' || _c3 == '$' || _c3 == '"' || _c3 == '\\' {
                         output.push(&args[prev_ind1.._ind2]);
                         output.push(&args[_ind3..(_ind3 + 1)]);
@@ -97,21 +98,17 @@ fn parse_input(args: &str) -> Vec<&str> {
             || c == '-'
         // For `ls -1`
         {
-            // We need to clone as we can't iterate one step back.
-            // Hence, create a second iterator and move it as desired,
-            // then, move the original iterator one less times than the second iterator
-            let (ind2, _) = it
-                .clone() // Cheap to clone
-                .find(|(_, x)| x == &'\'' || x == &'\"' || x == &' ' || x == &'\\')
-                .unwrap_or((args.len(), ' '));
+            let mut ind2 = args.len(); // Default value is end of string
 
-            output.push(&args[ind1..ind2]);
-
-            // As we can't iterate one step back,
-            // we move the original iterator n -1 times
-            for _ in 0..(ind2 - ind1 - 1) {
+            // Check the next value before moving the iterator
+            while let Some(&(i, c)) = it.peek() {
+                if c == '\'' || c == '"' || c == ' ' || c == '\\' {
+                    ind2 = i;
+                    break;
+                }
                 it.next();
             }
+            output.push(&args[ind1..ind2]);
         } else if c == ' ' && !output.is_empty() && output.last().unwrap() != &" " {
             output.push(" ");
         } else if c == '\\' {
