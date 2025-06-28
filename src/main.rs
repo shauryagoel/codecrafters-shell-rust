@@ -1,3 +1,4 @@
+use std::fs::OpenOptions;
 use std::{
     fs::File,
     io::{self, Write},
@@ -9,13 +10,27 @@ use shell::Shell;
 
 // Handle redirection of output of a command to stdout or to a file
 fn get_stdout_stream_path(parsed_args: &mut Vec<&str>) -> Box<dyn Write> {
-    let result = parsed_args.iter().find(|&&x| x == "1>" || x == ">");
+    // dbg!(&parsed_args);
+    let result = parsed_args
+        .iter()
+        .find(|&&x| x == "1>" || x == ">" || x == ">>" || x == "1>>");
     if result.is_some() && parsed_args.len() >= 3 {
-        let new_file = File::create(parsed_args.pop().unwrap()).unwrap();
+        let file_name = parsed_args.last().unwrap();
+        // Choose whether to truncate a file or append to a file
+        let file = match result {
+            Some(&">") | Some(&"1>") => File::create(file_name).unwrap(), // This is also a wrapper over `OpenOptions`
+            Some(&">>") | Some(&"1>>") => OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(file_name)
+                .unwrap(),
+            Some(_) | None => panic!("Not possible"),
+        };
+        parsed_args.pop(); // Remove the file path
         parsed_args.pop(); // Remove the " "
         parsed_args.pop(); // Remove the redirection symbol
-        parsed_args.pop(); // Remove the " "
-        Box::new(new_file)
+        parsed_args.pop(); // Needed for running tests; will be `None` outside tests
+        Box::new(file)
     } else {
         Box::new(io::stdout())
     }
@@ -23,13 +38,24 @@ fn get_stdout_stream_path(parsed_args: &mut Vec<&str>) -> Box<dyn Write> {
 
 // Handle redirection of error of a command to stderr or to a file
 fn get_stderr_stream_path(parsed_args: &mut Vec<&str>) -> Box<dyn Write> {
-    let result = parsed_args.iter().find(|&&x| x == "2>");
+    let result = parsed_args.iter().find(|&&x| x == "2>" || x == "2>>");
     if result.is_some() && parsed_args.len() >= 3 {
-        let new_file = File::create(parsed_args.pop().unwrap()).unwrap();
+        let file_name = parsed_args.last().unwrap();
+        // Choose whether to truncate a file or append to a file
+        let file = match result {
+            Some(&"2>") => File::create(file_name).unwrap(), // This is also a wrapper over `OpenOptions`
+            Some(&"2>>") => OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(file_name)
+                .unwrap(),
+            Some(_) | None => panic!("Not possible"),
+        };
+        parsed_args.pop(); // Remove the file path
         parsed_args.pop(); // Remove the " "
         parsed_args.pop(); // Remove the redirection symbol
-        parsed_args.pop(); // Remove the " "
-        Box::new(new_file)
+        parsed_args.pop(); // Needed for running tests; will be `None` outside tests
+        Box::new(file)
     } else {
         Box::new(io::stderr())
     }
