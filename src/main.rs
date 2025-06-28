@@ -1,8 +1,9 @@
-use std::fs::OpenOptions;
+use rustyline::error::ReadlineError;
+use rustyline::{DefaultEditor, Result};
+use std::process::ExitCode;
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{self, Write},
-    process::ExitCode,
 };
 
 mod shell;
@@ -120,52 +121,58 @@ fn parse_input(args: &str) -> Vec<&str> {
     output
 }
 
-fn main() -> ExitCode {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut input = String::new();
+fn main() -> Result<ExitCode> {
+    let mut rl = DefaultEditor::new()?;
 
-    let is_testing = false; // NOTE: set to `true` during testing
     loop {
-        // Printing shell prompt is disabled during tests
-        // to avoid removing `$ ` from stdout
-        if !is_testing {
-            print!("$ ");
+        let readline = rl.readline("$ ");
+
+        match readline {
+            Ok(input) => {
+                // Sanitize the input
+                let trimmed_input = input.trim(); // Trim also removes the \n when pressing enter to run the command
+                if trimmed_input.is_empty() {
+                    continue;
+                }
+
+                // Clean the input
+                let parsed_input = parse_input(trimmed_input);
+                let parsed_command = parsed_input[0];
+                let mut parsed_args: Vec<&str> = if parsed_input.len() > 2 {
+                    parsed_input[2..].into() // The second element in the parsed_input is " ", hence skip it
+                } else {
+                    Vec::new()
+                };
+
+                let stdout_path = get_stdout_stream_path(&mut parsed_args);
+                let stderr_path = get_stderr_stream_path(&mut parsed_args);
+                let mut shell = Shell::new(parsed_command, &parsed_args, stdout_path, stderr_path); // TODO: move creation of shell outside for loop
+
+                // println!("{:?} {}", parsed_args, parsed_args.len());
+
+                let status_code = shell.execute();
+
+                // Quit the shell if user supplies the `exit` command
+                // TODO: create a getter for this
+                if shell.command == "exit" {
+                    return Ok(status_code);
+                }
+
+                shell.write_to_stdout_buffer(); // Write the output of the command to the output buffer
+                shell.write_to_stderr_buffer(); // Write the error of the command to the error buffer
+            }
+            Err(ReadlineError::Interrupted) => {
+                // println!("CTRL-C");
+                return Ok(ExitCode::from(130));
+            }
+            Err(ReadlineError::Eof) => {
+                // println!("CTRL-D");
+                return Ok(ExitCode::from(130));
+            }
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                return Ok(ExitCode::from(1));
+            }
         }
-        stdout.flush().unwrap();
-        stdin.read_line(&mut input).unwrap(); // Wait for user input
-
-        // Sanitize the input
-        let trimmed_input = input.trim(); // Trim also removes the \n when pressing enter to run the command
-        if trimmed_input.is_empty() {
-            continue;
-        }
-
-        // Clean the input
-        let parsed_input = parse_input(trimmed_input);
-        let parsed_command = parsed_input[0];
-        let mut parsed_args: Vec<&str> = if parsed_input.len() > 2 {
-            parsed_input[2..].into() // The second element in the parsed_input is " ", hence skip it
-        } else {
-            Vec::new()
-        };
-
-        let stdout_path = get_stdout_stream_path(&mut parsed_args);
-        let stderr_path = get_stderr_stream_path(&mut parsed_args);
-        let mut shell = Shell::new(parsed_command, &parsed_args, stdout_path, stderr_path); // TODO: move creation of shell outside for loop
-
-        // println!("{:?} {}", parsed_args, parsed_args.len());
-
-        let status_code = shell.execute();
-
-        // Quit the shell if user supplies the `exit` command
-        // TODO: create a getter for this
-        if shell.command == "exit" {
-            return status_code;
-        }
-
-        shell.write_to_stdout_buffer(); // Write the output of the command to the output buffer
-        shell.write_to_stderr_buffer(); // Write the output of the command to the output buffer
-        input.clear(); // Clear the input string so that it can be used again without re-declaring the variable
     }
 }
