@@ -8,15 +8,30 @@ mod shell;
 use shell::Shell;
 
 // Handle redirection of output of a command to stdout or to a file
-fn get_output_buffer_path(parsed_args: &mut Vec<&str>) -> Box<dyn Write> {
+fn get_stdout_stream_path(parsed_args: &mut Vec<&str>) -> Box<dyn Write> {
     let result = parsed_args.iter().find(|&&x| x == "1>" || x == ">");
     if result.is_some() && parsed_args.len() >= 3 {
         let new_file = File::create(parsed_args.pop().unwrap()).unwrap();
+        parsed_args.pop(); // Remove the " "
         parsed_args.pop(); // Remove the redirection symbol
         parsed_args.pop(); // Remove the " "
         Box::new(new_file)
     } else {
         Box::new(io::stdout())
+    }
+}
+
+// Handle redirection of error of a command to stderr or to a file
+fn get_stderr_stream_path(parsed_args: &mut Vec<&str>) -> Box<dyn Write> {
+    let result = parsed_args.iter().find(|&&x| x == "2>");
+    if result.is_some() && parsed_args.len() >= 3 {
+        let new_file = File::create(parsed_args.pop().unwrap()).unwrap();
+        parsed_args.pop(); // Remove the " "
+        parsed_args.pop(); // Remove the redirection symbol
+        parsed_args.pop(); // Remove the " "
+        Box::new(new_file)
+    } else {
+        Box::new(io::stderr())
     }
 }
 
@@ -85,10 +100,15 @@ fn parse_input(args: &str) -> Vec<&str> {
 fn main() -> ExitCode {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
-
     let mut input = String::new();
+
+    let is_testing = false; // NOTE: set to `true` during testing
     loop {
-        print!("$ ");
+        // Printing shell prompt is disabled during tests
+        // to avoid removing `$ ` from stdout
+        if !is_testing {
+            print!("$ ");
+        }
         stdout.flush().unwrap();
         stdin.read_line(&mut input).unwrap(); // Wait for user input
 
@@ -107,8 +127,9 @@ fn main() -> ExitCode {
             Vec::new()
         };
 
-        let stdout_path = get_output_buffer_path(&mut parsed_args);
-        let mut shell = Shell::new(parsed_command, &parsed_args, stdout_path); // TODO: move creation of shell outside for loop
+        let stdout_path = get_stdout_stream_path(&mut parsed_args);
+        let stderr_path = get_stderr_stream_path(&mut parsed_args);
+        let mut shell = Shell::new(parsed_command, &parsed_args, stdout_path, stderr_path); // TODO: move creation of shell outside for loop
 
         // println!("{:?} {}", parsed_args, parsed_args.len());
 
@@ -121,6 +142,7 @@ fn main() -> ExitCode {
         }
 
         shell.write_to_stdout_buffer(); // Write the output of the command to the output buffer
+        shell.write_to_stderr_buffer(); // Write the output of the command to the output buffer
         input.clear(); // Clear the input string so that it can be used again without re-declaring the variable
     }
 }

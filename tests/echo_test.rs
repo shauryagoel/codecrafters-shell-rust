@@ -60,7 +60,8 @@ fn test_echo() {
 
     // Compare the desired results from the stdout with the table of inputs
     for (line, (_, want)) in output.stdout.lines().zip(table_test_inputs) {
-        let got = &(line.unwrap())[2..]; // Remove the `$ ` (the prompt)
+        // let got = &(line.unwrap())[2..]; // Remove the `$ ` (the prompt)
+        let got = line.unwrap();
         assert_eq!(got, want);
     }
 }

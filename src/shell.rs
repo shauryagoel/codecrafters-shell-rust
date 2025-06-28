@@ -9,17 +9,24 @@ pub struct Shell<'a> {
     args: &'a Vec<&'a str>,
     stdout_buffer: String,
     stdout_stream: Box<dyn Write>,
-    // stderr_buffer: String,
-    // stderr_path: &'a dyn Write,
+    stderr_buffer: String,
+    stderr_stream: Box<dyn Write>,
 }
 
 impl<'a> Shell<'a> {
-    pub fn new(command: &'a str, args: &'a Vec<&'a str>, stdout_stream: Box<dyn Write>) -> Self {
+    pub fn new(
+        command: &'a str,
+        args: &'a Vec<&'a str>,
+        stdout_stream: Box<dyn Write>,
+        stderr_stream: Box<dyn Write>,
+    ) -> Self {
         Self {
             command,
             args,
             stdout_buffer: String::new(),
             stdout_stream,
+            stderr_buffer: String::new(),
+            stderr_stream,
         }
     }
 
@@ -108,6 +115,11 @@ impl<'a> Shell<'a> {
         self.stdout_stream.write_all(self.stdout_buffer.as_bytes());
     }
 
+    // Write the error buffer to the error stream
+    pub fn write_to_stderr_buffer(&mut self) {
+        self.stderr_stream.write_all(self.stderr_buffer.as_bytes());
+    }
+
     // Execute the command with args and return appropriate status code
     pub fn execute(&mut self) -> ExitCode {
         match self.command {
@@ -122,15 +134,22 @@ impl<'a> Shell<'a> {
                     let child = Command::new(self.command)
                         .args(self.args.iter().filter(|&x| !x.trim().is_empty()))
                         .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
                         .spawn()
                         .expect("Command failed to run");
 
                     let output = child.wait_with_output().expect("failed to read stdout");
 
                     // Append Vec<u8> to `stdout_buffer` String
+                    // For stdout
                     for line in output.stdout.lines() {
                         self.stdout_buffer += line.unwrap().as_str();
                         self.stdout_buffer += "\n";
+                    }
+                    // For stderr
+                    for line in output.stderr.lines() {
+                        self.stderr_buffer += line.unwrap().as_str();
+                        self.stderr_buffer += "\n";
                     }
 
                     (output.status.code().unwrap() as u8).into() // Convert ExitStatus to ExitCode
